@@ -1,0 +1,11 @@
+Package: com.wolfox.ytkace
+Name: WolFox
+Version: 1.2.1
+Architecture: iphoneos-arm64
+Description: WolFox for YouTube iOS
+Maintainer: WolFox Project
+Author: WolFox Project
+Section: Tweaks
+Depends: mobilesubstrate | ellekit, firmware (>= 15.0)
+Homepage: https://github.com/khalid003600-png/WolFox
+Tag: role::enduser

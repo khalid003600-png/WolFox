@@ -1,0 +1,153 @@
+name: WolFox IPA (No Jailbreak)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ipa_url:
+        description: Direct URL to a decrypted YouTube IPA for iOS 16 (or another compatible base)
+        required: true
+        type: string
+      ipa_url_ios17:
+        description: Optional direct URL to a second decrypted YouTube IPA (for example, an iOS 17+ base)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Test
+        run: python3 -m unittest discover -s Tests -v
+
+  build-library:
+    needs: test
+    runs-on: ubuntu-24.04
+    env:
+      THEOS: ${{ github.workspace }}/.theos
+      CI: true
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Cache Theos
+        id: cache-theos
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.theos
+          key: wolfox-theos-${{ runner.os }}-arm64-v1
+
+      - name: Setup Theos
+        if: steps.cache-theos.outputs.cache-hit != 'true'
+        run: bash -c "$(curl -fsSL https://raw.githubusercontent.com/roothide/theos/master/bin/install-theos)"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build library only (no .deb)
+        run: |
+          export PATH="$THEOS/toolchain/linux/iphone/bin:$PATH"
+          make clean
+          make all FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
+          test -f dist/WolFox.dylib
+          bash Tools/verify-artifacts.sh dist/WolFox.dylib
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: WolFox-arm64-dylib
+          path: dist/WolFox.dylib
+          if-no-files-found: error
+
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      targets: ${{ steps.targets.outputs.targets }}
+    steps:
+      - name: Collect YouTube IPA bases
+        id: targets
+        env:
+          IPA_URL: ${{ inputs.ipa_url }}
+          IPA_URL_IOS17: ${{ inputs.ipa_url_ios17 }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import os
+
+          targets = [{"label": "ios16", "url": os.environ["IPA_URL"]}]
+          second = os.environ.get("IPA_URL_IOS17", "").strip()
+          if second:
+              targets.append({"label": "ios17", "url": second})
+          print("targets=" + json.dumps(targets))
+          PY
+
+  package:
+    needs: [build-library, plan]
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(needs.plan.outputs.targets) }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: WolFox-arm64-dylib
+          path: build
+
+      - uses: levibostian/action-hide-sensitive-inputs@v1
+
+      - name: Setup
+        run: brew install ldid
+
+      - name: Download YouTube base IPA
+        env:
+          IPA_URL: ${{ matrix.target.url }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "$IPA_URL" == "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/assets/"* ]]; then
+            curl --fail --location \
+              --header "Accept: application/octet-stream" \
+              --header "Authorization: Bearer $GH_TOKEN" \
+              "$IPA_URL" --output YouTube.ipa
+          else
+            curl --fail --location "$IPA_URL" --output YouTube.ipa
+          fi
+          file_type=$(file --mime-type -b YouTube.ipa)
+          if [[ "$file_type" != "application/x-ios-app" && "$file_type" != "application/zip" ]]; then
+            echo "The supplied file is not an IPA/ZIP archive." >&2
+            exit 1
+          fi
+
+      - name: Inject and package WolFox
+        id: inject
+        run: |
+          tweak_version="$(awk '/^Version:/ {print $2}' control)"
+          youtube_version="$(python3 - <<'PY'
+          import plistlib
+          import zipfile
+
+          with zipfile.ZipFile('YouTube.ipa') as archive:
+              info = next(name for name in archive.namelist()
+                          if name.startswith('Payload/') and name.endswith('.app/Info.plist'))
+              print(plistlib.loads(archive.read(info))['CFBundleShortVersionString'])
+          PY
+          )"
+          if [ "${{ matrix.target.label }}" = "ios16" ]; then
+            output="WolFox_${tweak_version}_YouTube_iOS16_${youtube_version}.ipa"
+          else
+            output="WolFox_${tweak_version}_YouTube_${youtube_version}.ipa"
+          fi
+          bash Scripts/build-safari-extension.sh safari-extension iphoneos
+          SAFARI_EXTENSION_APPEX=safari-extension/OpenInWolFox.appex \
+            bash Scripts/sideload-repack.sh YouTube.ipa build/WolFox.dylib "$output"
+          bash Tools/verify-artifacts.sh build/WolFox.dylib "$output"
+          unzip -l "$output" | grep -q 'PlugIns/OpenInWolFox.appex/OpenInWolFox$'
+          echo "ipa=$output" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: WolFox-IPA-${{ matrix.target.label }}
+          path: ${{ steps.inject.outputs.ipa }}
+          if-no-files-found: error
