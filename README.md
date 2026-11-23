@@ -1,4 +1,17 @@
 # WolFox for YouTube (iOS)
+## الوصف العربي
+
+WolFox مشروع مفتوح المصدر لتحسين YouTube على iOS، ويضيف ميزات مثل تنزيل الفيديو والصوت وShorts، والتشغيل في الخلفية، وصورة داخل صورة، وSponsorBlock وتخصيص الواجهة. يحافظ على معرّف YouTube الداخلي `com.google.ios.youtube` للتوافق.
+
+المستودع يضم الشيفرة والموارد وسكربتات البناء والاختبارات فقط؛ ولا يضم IPA جاهزة أو تطبيقًا مبنيًا. الصور أدناه معاينات واجهة محفوظة ضمن المصدر، وليست لقطات مباشرة من تشغيل IPA المبنية في هذه الجلسة.
+
+<p align="center">
+  <img src="screenshots/framed/video-player.png" width="230" alt="معاينة مشغل الفيديو">
+  <img src="screenshots/framed/player-settings.png" width="230" alt="معاينة إعدادات المشغل">
+  <img src="screenshots/framed/download-progress.png" width="230" alt="معاينة تقدم التنزيل">
+</p>
+
+## English
 
 WolFox is an open-source iOS project derived from the YTKACE YouTube enhancement. The public WolFox repository contains source code, resources, build scripts, tests, and notices only. It does **not** contain an IPA, app bundle, built WolFox library, Debian package, or other built WolFox application artifact.
 

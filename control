@@ -2,7 +2,7 @@ Package: com.wolfox.ytkace
 Name: WolFox
 Version: 1.2.1
 Architecture: iphoneos-arm64
-Description: WolFox for YouTube iOS
+Description: إضافة WolFox لتحسين YouTube على iOS
 Maintainer: WolFox Project
 Author: WolFox Project
 Section: Tweaks
